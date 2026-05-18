@@ -1,38 +1,54 @@
+const express = require('express');
+const router = express.Router();
 const axios = require('axios');
 
 const EVOLUTION_URL = process.env.EVOLUTION_URL;
 const EVOLUTION_KEY = process.env.EVOLUTION_KEY;
 
-async function sendMusic(musician_id, client_phone, music_url) {
+router.post('/connect', async (req, res) => {
+  const { musician_id } = req.body;
   const instanceName = `musician_${musician_id}`;
   try {
-    await axios.post(`${EVOLUTION_URL}/message/sendMedia/${instanceName}`, {
-      number: client_phone,
-      mediatype: 'audio',
-      media: music_url,
-      caption: 'Aqui está sua música personalizada! 🎵'
+    await axios.post(`${EVOLUTION_URL}/instance/create`, {
+      instanceName,
+      qrcode: true,
+      integration: 'WHATSAPP-BAILEYS'
     }, {
       headers: { apikey: EVOLUTION_KEY }
     });
+    res.json({ success: true, instance: instanceName });
   } catch (err) {
-    console.error('Erro ao enviar música:', err.message);
-    throw err;
+    res.status(500).json({ error: err.message });
   }
-}
+});
 
-async function sendText(musician_id, client_phone, text) {
+router.get('/qrcode', async (req, res) => {
+  const { musician_id } = req.query;
   const instanceName = `musician_${musician_id}`;
   try {
-    await axios.post(`${EVOLUTION_URL}/message/sendText/${instanceName}`, {
-      number: client_phone,
-      text
-    }, {
-      headers: { apikey: EVOLUTION_KEY }
-    });
+    const response = await axios.get(
+      `${EVOLUTION_URL}/instance/connect/${instanceName}`,
+      { headers: { apikey: EVOLUTION_KEY } }
+    );
+    const qrcode = response.data?.base64 || response.data?.qrcode?.base64 || null;
+    res.json({ qrcode });
   } catch (err) {
-    console.error('Erro ao enviar mensagem:', err.message);
-    throw err;
+    res.status(500).json({ error: err.message });
   }
-}
+});
 
-module.exports = { sendMusic, sendText };
+router.get('/status', async (req, res) => {
+  const { musician_id } = req.query;
+  const instanceName = `musician_${musician_id}`;
+  try {
+    const response = await axios.get(
+      `${EVOLUTION_URL}/instance/connectionState/${instanceName}`,
+      { headers: { apikey: EVOLUTION_KEY } }
+    );
+    res.json({ status: response.data?.instance?.state || 'close' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;
